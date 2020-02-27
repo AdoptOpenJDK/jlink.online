@@ -14,7 +14,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
+
+	"github.com/mholt/archiver/v3"
 )
 
 type releaseResponse struct {
@@ -84,4 +88,36 @@ func lookupLatestRelease(arch, platform, implementation string, majorVersion int
 	}
 
 	return nil, nil
+}
+
+// Only one runtime can be downloaded at a time. This is to prevent issues with
+// partial downloads.
+var downloadLock sync.Mutex
+
+// DownloadRelease downloads a JDK runtime image from AdoptOpenJDK.
+func downloadRelease(release *releaseBinary) (string, error) {
+	downloadLock.Lock()
+	defer downloadLock.Unlock()
+
+	output := RT_CACHE + "/" + strings.TrimSuffix(strings.TrimSuffix(release.FileName, ".zip"), ".tar.gz")
+
+	// Check if the runtime is cached
+	if _, e := os.Stat(output); !os.IsNotExist(e) {
+		return output + "/jdk-" + release.ReleaseVersion.Version, nil
+	}
+
+	archive, dir := newTemporaryFile(release.FileName)
+	defer os.RemoveAll(dir)
+
+	// Download the runtime
+	if err := download(github, release.Link, archive); err != nil {
+		return "", err
+	}
+
+	// Extract to the cache directory
+	if err := archiver.Unarchive(archive, output); err != nil {
+		return "", err
+	}
+
+	return output + "/jdk-" + release.ReleaseVersion.Version, nil
 }

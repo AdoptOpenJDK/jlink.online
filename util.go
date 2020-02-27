@@ -16,9 +16,9 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -67,20 +67,6 @@ func downloadBytes(client *http.Client, source string) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// Run executes a command with some additional logging.
-func run(name string, a ...string) error {
-	cmd := exec.Command(name, a...)
-	log.Println("Executing:", cmd.Args)
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Println("Execution failed:", string(out))
-		return err
-	}
-
-	return nil
-}
-
 // GetMajorVersion returns the major version field from a Java version string.
 func getMajorVersion(version string) (int, error) {
 	if i := strings.Index(version, "."); i != -1 {
@@ -100,4 +86,18 @@ func parseModuleInfo(file string) []string {
 	}
 
 	return modules
+}
+
+// NewTemporaryFile returns a new temporary file and its parent directory.
+func newTemporaryFile(filename string) (string, string) {
+	dir := TMP + "/" + strconv.Itoa(rand.Int())
+	_ = os.MkdirAll(dir, os.ModePerm)
+	return dir + "/" + filename, dir
+}
+
+// NewTemporaryDirectory returns a new temporary directory and its parent directory.
+func newTemporaryDirectory(dirname string) (string, string) {
+	dir := TMP + "/" + strconv.Itoa(rand.Int())
+	_ = os.MkdirAll(dir+"/"+dirname, os.ModePerm)
+	return dir + "/" + dirname, dir
 }

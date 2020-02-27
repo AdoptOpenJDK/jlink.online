@@ -12,29 +12,37 @@
 package main
 
 import (
+	"bytes"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"regexp"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mholt/archiver/v3"
 )
 
 var (
 	// The default listening port
-	port = "80"
+	PORT = "80"
 
 	// A cache directory for base runtimes
-	cache = os.TempDir() + "/jlink/cache"
+	RT_CACHE = "/runtime_cache"
 
-	// A temporary directory for downloads and output
-	tmp = os.TempDir() + "/jlink/tmp"
+	// A memory filesystem for short-lived files
+	TMP = "/tmp"
+
+	// The current EA major version
+	VERSION_EA = 14
+
+	// The current GA major version
+	VERSION_GA = 13
+
+	// The current LTS major version
+	VERSION_LTS = 11
 )
 
 // A client for downloading AdoptOpenJDK releases
@@ -42,7 +50,7 @@ var github = &http.Client{
 	Timeout: time.Second * 60,
 }
 
-// A client for querying release versions
+// A client for querying release metadata from api.adoptopenjdk.net
 var adoptOpenJdk = &http.Client{
 	Timeout: time.Second * 5,
 }
@@ -81,21 +89,21 @@ func main() {
 	router := gin.Default()
 
 	// Override environment variables
-	if _port, exists := os.LookupEnv("PORT"); exists {
-		port = _port
+	if port, exists := os.LookupEnv("PORT"); exists {
+		PORT = port
 	}
-	if _cache, exists := os.LookupEnv("CACHE"); exists {
-		cache = _cache
+	if cache, exists := os.LookupEnv("CACHE"); exists {
+		RT_CACHE = cache
 	}
-	if _tmp, exists := os.LookupEnv("TMP"); exists {
-		tmp = _tmp
+	if tmp, exists := os.LookupEnv("TMP"); exists {
+		TMP = tmp
 	}
-	_ = os.MkdirAll(cache, os.ModePerm)
-	_ = os.MkdirAll(tmp, os.ModePerm)
+	_ = os.MkdirAll(RT_CACHE, os.ModePerm)
+	_ = os.MkdirAll(TMP, os.ModePerm)
 
 	// Redirect index requests to the GitHub project page
 	router.GET("/", func(context *gin.Context) {
-		context.Redirect(http.StatusMovedPermanently, "https://github.com/cilki/jlink.online")
+		context.Redirect(http.StatusMovedPermanently, "https://github.com/AdoptOpenJDK/jlink.online")
 	})
 
 	// An endpoint for runtime requests
@@ -154,7 +162,7 @@ func main() {
 		handleRequest(context, platform, arch, version, endian, impl, parseModuleInfo(string(bytes)), artifacts)
 	})
 
-	router.Run(":" + port)
+	router.Run(":" + PORT)
 }
 
 var (
@@ -224,14 +232,14 @@ func handleRequest(context *gin.Context, platform, arch, version, endian, implem
 
 	switch version {
 	case "lts":
-		release, _ = lookupLatestRelease(arch, platform, implementation, 11)
-		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, 11)
+		release, _ = lookupLatestRelease(arch, platform, implementation, VERSION_LTS)
+		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, VERSION_LTS)
 	case "ea":
-		release, _ = lookupLatestRelease(arch, platform, implementation, 14)
-		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, 14)
+		release, _ = lookupLatestRelease(arch, platform, implementation, VERSION_EA)
+		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, VERSION_EA)
 	case "ga":
-		release, _ = lookupLatestRelease(arch, platform, implementation, 13)
-		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, 13)
+		release, _ = lookupLatestRelease(arch, platform, implementation, VERSION_GA)
+		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, VERSION_GA)
 	default:
 		// Validate version number
 		if !versionCheck.MatchString(version) {
@@ -256,7 +264,7 @@ func handleRequest(context *gin.Context, platform, arch, version, endian, implem
 	}
 
 	// Download a linux runtime containing a compatible version of jlink
-	jdk, err := downloadRuntime(jdkRelease)
+	jdk, err := downloadRelease(jdkRelease)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to download runtime"})
 		log.Println(err)
@@ -264,108 +272,70 @@ func handleRequest(context *gin.Context, platform, arch, version, endian, implem
 	}
 
 	// Download the target runtime
-	runtime, err := downloadRuntime(release)
+	runtime, err := downloadRelease(release)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to download target runtime"})
 		log.Println(err)
 		return
 	}
 
-	// Choose a temporary directory for the request
-	temp := tmp + "/" + strconv.Itoa(rand.Int())
-	_ = os.MkdirAll(temp+"/m2", os.ModePerm)
-	defer os.RemoveAll(temp)
+	// Create a directory for Maven artifacts
+	m2, dir := newTemporaryDirectory("m2")
+	defer os.RemoveAll(dir)
 
 	// Download any required artifacts
-	if err := downloadArtifacts(temp+"/m2", artifacts); err != nil {
+	if err := downloadArtifacts(m2, artifacts); err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to download artifacts"})
 		log.Println(err)
 		return
 	}
 
-	// Run jlink on the downloaded runtime to produce an archive
-	archive, err := jlink(jdk, temp, runtime, endian, modules, release)
+	// Run jlink on the downloaded runtime
+	archive, err := jlink(jdk, m2, runtime, endian, modules, release)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to generate runtime"})
 		log.Println(err)
 		return
 	}
 
-	info, err := os.Stat(archive)
-	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"success": false})
-		log.Println(err)
-		return
-	}
-
-	reader, err := os.Open(archive)
-	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"success": false})
-		log.Println(err)
-		return
-	}
-	defer reader.Close()
-
-	addHeaders := map[string]string{
-		"Content-Disposition": "attachment; filename=\"" + filepath.Base(archive) + "\"",
+	context.DataFromReader(http.StatusOK, int64(archive.Len()), "application/octet-stream", archive, map[string]string{
+		"Content-Disposition": "attachment; filename=\"" + release.FileName + "\"",
 		"Accept-Ranges":       "bytes",
-	}
-	context.DataFromReader(http.StatusOK, info.Size(), "application/octet-stream", reader, addHeaders)
-}
-
-// Only one runtime can be downloaded at a time. This is to prevent issues with
-// partial downloads.
-var downloadLock sync.Mutex
-
-// DownloadRuntime downloads a JDK build from AdoptOpenJDK into the system
-// temporary directory according to the given parameters.
-func downloadRuntime(release *releaseBinary) (string, error) {
-	downloadLock.Lock()
-	defer downloadLock.Unlock()
-
-	runtime := cache + "/" + strings.TrimSuffix(strings.TrimSuffix(release.FileName, ".zip"), ".tar.gz")
-	archive := tmp + "/" + release.FileName
-
-	// Check if the runtime is cached
-	if _, e := os.Stat(runtime); !os.IsNotExist(e) {
-		return runtime, nil
-	}
-
-	// Download the runtime
-	if err := download(github, release.Link, archive); err != nil {
-		return "", err
-	}
-
-	// Create the runtime directory
-	if err := os.MkdirAll(runtime, os.ModePerm); err != nil {
-		return "", err
-	}
-
-	// Extract to the runtime directory
-	if err := run("bsdtar", "-C", runtime, "-xf", archive, "-s", "|[^/]*/||"); err != nil {
-		return "", err
-	}
-
-	// Delete archive
-	return runtime, os.Remove(archive)
+	})
 }
 
 // Jlink uses a standard JDK runtime to generate a custom runtime image
 // for the given set of modules.
-func jlink(jdk, temp, runtime, endian string, modules []string, release *releaseBinary) (string, error) {
-	output := temp + "/jdk-" + release.ReleaseVersion.Version
-	archive := temp + "/" + release.FileName
+func jlink(jdk, m2, runtime, endian string, modules []string, release *releaseBinary) (*bytes.Buffer, error) {
 
-	err := run(jdk+"/bin/jlink", "--compress=0", "--no-header-files", "--no-man-pages", "--endian", endian, "--module-path", runtime+"/jmods:"+temp+"/m2", "--add-modules", strings.Join(modules, ","), "--output", output)
+	if err := os.Chmod(jdk+"/bin/jlink", os.ModePerm); err != nil {
+		return nil, err
+	}
+
+	output, dir := newTemporaryFile("jdk-" + release.ReleaseVersion.Version)
+	defer os.RemoveAll(dir)
+
+	cmd := exec.Command(jdk+"/bin/jlink", "--compress=0", "--no-header-files", "--no-man-pages", "--endian", endian, "--module-path", runtime+"/jmods:"+m2, "--add-modules", strings.Join(modules, ","), "--output", output)
+	log.Println("Executing:", cmd.Args)
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+
+	archive, dir := newTemporaryFile(release.FileName)
+	defer os.RemoveAll(dir)
+
+	if err := archiver.Archive([]string{output}, archive); err != nil {
+		return nil, err
+	}
+
+	f, err := os.Open(archive)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	defer f.Close()
 
-	// Create archive
-	if err := run("bsdtar", "-C", filepath.Dir(output), "-a", "-cf", archive, filepath.Base(output)); err != nil {
-		return "", err
-	}
+	var buffer bytes.Buffer
+	buffer.ReadFrom(f)
 
-	// Delete runtime
-	return archive, os.RemoveAll(output)
+	return &buffer, nil
 }

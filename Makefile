@@ -18,3 +18,6 @@ push: build docker-login
 
 docker-login:
 	@eval "eval $$\( aws ecr --region us-east-2 get-login --no-include-email \)"
+
+run-container: build
+	@docker run --rm -p 80:80 --tmpfs /tmp jlink.online:latest
