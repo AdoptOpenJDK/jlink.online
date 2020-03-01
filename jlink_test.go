@@ -70,6 +70,7 @@ func assertRequestFailure(t *testing.T, req string, expectedCode int) {
 
 func TestJlink(t *testing.T) {
 	os.Setenv("PORT", "8080")
+	os.Setenv("CACHE", "/tmp/cache")
 	go main()
 
 	// Allow the server some time to start
