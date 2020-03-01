@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,9 @@ var (
 
 	// The current LTS major version
 	VERSION_LTS = 11
+
+	// Whether Maven Central integration is enabled
+	MAVEN_CENTRAL = false
 )
 
 // A client for downloading AdoptOpenJDK releases
@@ -52,7 +56,7 @@ var github = &http.Client{
 
 // A client for querying release metadata from api.adoptopenjdk.net
 var adoptOpenJdk = &http.Client{
-	Timeout: time.Second * 5,
+	Timeout: time.Second * 10,
 }
 
 // A client for downloading Maven Central artifacts
@@ -92,6 +96,13 @@ func main() {
 	if port, exists := os.LookupEnv("PORT"); exists {
 		PORT = port
 	}
+	if maven_central, exists := os.LookupEnv("MAVEN_CENTRAL"); exists {
+		if b, err := strconv.ParseBool(maven_central); err == nil {
+			MAVEN_CENTRAL = b
+		} else {
+			log.Fatal("Invalid value for MAVEN_CENTRAL flag")
+		}
+	}
 	if cache, exists := os.LookupEnv("CACHE"); exists {
 		RT_CACHE = cache
 	}
@@ -120,7 +131,12 @@ func main() {
 
 		var artifacts []string
 		if a := context.Query("artifacts"); a != "" {
-			artifacts = strings.Split(a, ",")
+			if MAVEN_CENTRAL {
+				artifacts = strings.Split(a, ",")
+			} else {
+				context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Maven Central integration is disabled"})
+				return
+			}
 		}
 
 		handleRequest(context, platform, arch, version, endian, impl, modules, artifacts)
@@ -132,6 +148,11 @@ func main() {
 
 		err := context.BindJSON(&req)
 		if err != nil {
+			return
+		}
+
+		if !MAVEN_CENTRAL && len(req.Artifacts) > 0 {
+			context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Maven Central integration is disabled"})
 			return
 		}
 
@@ -156,7 +177,12 @@ func main() {
 
 		var artifacts []string
 		if a := context.Query("artifacts"); a != "" {
-			artifacts = strings.Split(a, ",")
+			if MAVEN_CENTRAL {
+				artifacts = strings.Split(a, ",")
+			} else {
+				context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Maven Central integration is disabled"})
+				return
+			}
 		}
 
 		handleRequest(context, platform, arch, version, endian, impl, parseModuleInfo(string(bytes)), artifacts)
