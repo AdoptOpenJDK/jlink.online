@@ -12,28 +12,53 @@
 package main
 
 import (
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/mholt/archiver/v3"
 	"github.com/stretchr/testify/assert"
 )
 
-func assertRequestSuccess(t *testing.T, req string, expectedCode, expectedPayloadSize int) {
+func assertRequestSuccess(t *testing.T, req, filetype string) {
 	res, err := http.Get(req)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedCode, res.StatusCode)
-
+	assert.Equal(t, 200, res.StatusCode)
 	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+
+	archive, dir := newTemporaryFile("jdk" + filetype)
+	defer os.RemoveAll(dir)
+
+	out, err := os.Create(archive)
+	assert.NoError(t, err)
+	defer out.Close()
+
+	_, err = io.Copy(out, res.Body)
 	assert.NoError(t, err)
 
-	// Just ensure it's approximately the right size in bytes for now
-	// TODO extract and sanity check contents
-	assert.True(t, expectedPayloadSize-len(body) <= 10000 && expectedPayloadSize-len(body) >= -10000)
+	output, dir := newTemporaryFile("output")
+	defer os.RemoveAll(dir)
+
+	// Extract and sanity check contents
+	if err := archiver.Unarchive(archive, output); err != nil {
+		assert.NoError(t, err)
+	}
+
+	files, err := ioutil.ReadDir(output)
+	assert.NoError(t, err)
+	for _, f := range files {
+		if filetype == ".zip" {
+			_, err := os.Stat(output + "/" + f.Name() + "/bin/java.exe")
+			assert.NoError(t, err)
+		} else {
+			_, err := os.Stat(output + "/" + f.Name() + "/bin/java")
+			assert.NoError(t, err)
+		}
+	}
 }
 
 func assertRequestFailure(t *testing.T, req string, expectedCode int) {
@@ -50,7 +75,19 @@ func TestJlink(t *testing.T) {
 	// Allow the server some time to start
 	time.Sleep(4 * time.Second)
 
-	assertRequestSuccess(t, "http://localhost:8080/x64/linux/13?modules=java.base", 200, 18500662)
-	assertRequestSuccess(t, "http://localhost:8080/x64/windows/13?modules=java.base", 200, 17831320)
-	assertRequestFailure(t, "http://localhost:8080/x64/windows/1a3?modules=java.base", 400)
+	assertRequestSuccess(t, "http://localhost:8080/x64/linux/13?modules=java.base", ".tar.gz")
+	assertRequestSuccess(t, "http://localhost:8080/x64/windows/13?modules=java.base", ".zip")
+	assertRequestSuccess(t, "http://localhost:8080/x64/mac/13?modules=java.base", ".tar.gz")
+
+	// Invalid architecture
+	assertRequestFailure(t, "http://localhost:8080/a/windows/13", 400)
+	// Invalid OS
+	assertRequestFailure(t, "http://localhost:8080/x64/a/13", 400)
+	// Invalid version
+	assertRequestFailure(t, "http://localhost:8080/x64/windows/1a3", 400)
+	// Nonexistent version
+	assertRequestFailure(t, "http://localhost:8080/x64/windows/99", 400)
+	// Invalid module
+	assertRequestFailure(t, "http://localhost:8080/x64/windows/13?modules=123", 400)
+	assertRequestFailure(t, "http://localhost:8080/x64/windows/13?modules=&", 400)
 }
