@@ -90,6 +90,10 @@ type runtimeReq struct {
 }
 
 func main() {
+	if err := loadLocalReleaseCache(); err != nil {
+		log.Fatal(err)
+	}
+
 	router := gin.Default()
 
 	// Override environment variables
