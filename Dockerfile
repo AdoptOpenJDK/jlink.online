@@ -1,10 +1,6 @@
-FROM golang:1.13
+FROM golang:1.14
 
 WORKDIR /app
-
-# Install dependencies
-RUN apt-get update && apt-get install -y bsdtar
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY go.mod ./
 RUN go mod download
