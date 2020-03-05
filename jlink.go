@@ -90,6 +90,13 @@ type runtimeReq struct {
 }
 
 func main() {
+	if _, exists := os.LookupEnv("UPDATE_CACHE"); exists {
+		if err := updateLocalReleaseCache(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	if err := loadLocalReleaseCache(); err != nil {
 		log.Fatal(err)
 	}

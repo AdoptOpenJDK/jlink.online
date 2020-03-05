@@ -40,10 +40,40 @@ type releaseVersion struct {
 	Version string `json:"openjdk_version" binding:"required"`
 }
 
-var localCache map[string][]releaseBinary
+// A cache to reduce lookups to https://api.adoptopenjdk.net.
+var metadataCache map[string][]releaseBinary
+
+// Only one thread can read from or write to the local cache at a time.
+var metadataCacheLock sync.Mutex
+
+// Only one runtime can be downloaded at a time. This is to prevent issues with
+// partial downloads.
+var downloadLock sync.Mutex
+
+// CacheRelease inserts the given release into the local cache.
+func cacheRelease(release releaseBinary) {
+	version := strings.Split(release.ReleaseVersion.Version, "+")[0]
+	if metadataCache[version] == nil {
+		metadataCache[version] = make([]releaseBinary, 0)
+	}
+
+	for i, r := range metadataCache[version] {
+		if release.Platform == r.Platform && release.Arch == r.Arch && release.Implementation == r.Implementation {
+			if compareJdkRelease(r.ReleaseVersion.Version, release.ReleaseVersion.Version) < 0 {
+				metadataCache[version][i] = release
+			}
+			return
+		}
+	}
+
+	metadataCache[version] = append(metadataCache[version], release)
+}
 
 // LoadLocalReleaseCache loads the local cache from the included JSON file.
 func loadLocalReleaseCache() error {
+	metadataCacheLock.Lock()
+	defer metadataCacheLock.Unlock()
+
 	releases, err := os.Open("adoptopenjdk.json")
 	if err != nil {
 		return err
@@ -54,20 +84,20 @@ func loadLocalReleaseCache() error {
 		return err
 	}
 
-	json.Unmarshal(bytes, &localCache)
+	json.Unmarshal(bytes, &metadataCache)
 	return nil
 }
 
 // LookupRelease finds a release for the given version string.
 func lookupRelease(arch, platform, implementation, version string) (*releaseBinary, error) {
+	metadataCacheLock.Lock()
+	defer metadataCacheLock.Unlock()
 
 	// Search local cache first
-	for v, releases := range localCache {
-		if version == strings.Split(v, "+")[0] {
-			for _, release := range releases {
-				if release.Platform == platform && release.Arch == arch && release.Implementation == implementation {
-					return &release, nil
-				}
+	if releases := metadataCache[version]; releases != nil {
+		for _, release := range releases {
+			if release.Platform == platform && release.Arch == arch && release.Implementation == implementation {
+				return &release, nil
 			}
 		}
 	}
@@ -90,12 +120,7 @@ func lookupRelease(arch, platform, implementation, version string) (*releaseBina
 			if release.Name[4:i] == version {
 				for _, binary := range release.Binaries {
 					if binary.Platform == platform && binary.Arch == arch {
-						// Cache result
-						if localCache[binary.ReleaseVersion.Version] == nil {
-							localCache[binary.ReleaseVersion.Version] = make([]releaseBinary, 0)
-						}
-						localCache[binary.ReleaseVersion.Version] = append(localCache[binary.ReleaseVersion.Version], binary)
-
+						cacheRelease(binary)
 						return &binary, nil
 					}
 				}
@@ -128,10 +153,6 @@ func lookupLatestRelease(arch, platform, implementation string, majorVersion int
 	return nil, nil
 }
 
-// Only one runtime can be downloaded at a time. This is to prevent issues with
-// partial downloads.
-var downloadLock sync.Mutex
-
 // DownloadRelease downloads a JDK runtime image from AdoptOpenJDK.
 func downloadRelease(release *releaseBinary) (string, error) {
 	downloadLock.Lock()
@@ -162,7 +183,10 @@ func downloadRelease(release *releaseBinary) (string, error) {
 
 // UpdateLocalReleaseCache redownloads release metadata from AdoptOpenJDK.
 func updateLocalReleaseCache() error {
-	cache := make(map[string][]releaseBinary)
+	metadataCacheLock.Lock()
+	defer metadataCacheLock.Unlock()
+
+	metadataCache = make(map[string][]releaseBinary)
 
 	// Repopulate local cache
 	for _, majorVersion := range []string{"9", "10", "11", "12", "13"} {
@@ -179,51 +203,17 @@ func updateLocalReleaseCache() error {
 
 		for _, release := range data {
 			for _, binary := range release.Binaries {
-				if cache[binary.ReleaseVersion.Version] == nil {
-					cache[binary.ReleaseVersion.Version] = make([]releaseBinary, 0)
+				// Filter "testimage"
+				if binary.Implementation == "testimage" {
+					continue
 				}
-				cache[binary.ReleaseVersion.Version] = append(cache[binary.ReleaseVersion.Version], binary)
+
+				cacheRelease(binary)
 			}
 		}
 	}
 
-	// Prune outdated releases
-	/*for k1 := range cache {
-		for k2 := range cache {
-			v1 := strings.Split(k1, "+")[0]
-			v2 := strings.Split(k2, "+")[0]
-			r1 := strings.Split(k1, "+")[1]
-			r2 := strings.Split(k2, "+")[1]
-			if v1 == v2 && r1 != r2 {
-				x1 := strings.Split(r1, ".")
-				x2 := strings.Split(r2, ".")
-
-				// Normalize array lengths
-				for i := 0; i < len(x2) - len(x1); i++ {
-					x1 = append(x1, "0")
-				}
-				for i := 0; i < len(x1) - len(x2); i++ {
-					x2 = append(x2, "0")
-				}
-
-				// Perform comparison
-				for i, _ := range x1 {
-					y1, _ := strconv.Atoi(x1[i])
-					y2, _ := strconv.Atoi(x2[i])
-
-					if y1 > y2 {
-						delete(cache.Releases, k2)
-						break
-					} else if y1 < y2 {
-						delete(cache.Releases, k1)
-						break
-					}
-				}
-			}
-		}
-	}*/
-
-	data, err := json.MarshalIndent(&cache, "", " ")
+	data, err := json.MarshalIndent(&metadataCache, "", " ")
 	if err != nil {
 		return err
 	}
@@ -232,6 +222,5 @@ func updateLocalReleaseCache() error {
 		return err
 	}
 
-	localCache = cache
 	return nil
 }

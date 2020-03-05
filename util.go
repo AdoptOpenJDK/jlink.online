@@ -24,6 +24,38 @@ import (
 	"strings"
 )
 
+// CompareJdkRelease returns 1 if the release number of version1 is greater than
+// version2, -1 if version1 is less than version2, and 0 if the versions are identical.
+func compareJdkRelease(version1, version2 string) int {
+	r1 := strings.Split(version1, "+")
+	r2 := strings.Split(version2, "+")
+
+	x1 := strings.Split(r1[len(r1)-1], ".")
+	x2 := strings.Split(r2[len(r2)-1], ".")
+
+	// Normalize array lengths
+	for i := len(x2) - len(x1); i > 0; i-- {
+		x1 = append(x1, "0")
+	}
+	for i := len(x1) - len(x2); i > 0; i-- {
+		x2 = append(x2, "0")
+	}
+
+	// Perform comparison
+	for i, _ := range x1 {
+		y1, _ := strconv.Atoi(x1[i])
+		y2, _ := strconv.Atoi(x2[i])
+
+		if y1 > y2 {
+			return 1
+		} else if y1 < y2 {
+			return -1
+		}
+	}
+
+	return 0
+}
+
 func download(client *http.Client, source, dest string) error {
 	log.Println("Downloading:", source)
 

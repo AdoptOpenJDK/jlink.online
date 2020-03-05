@@ -17,6 +17,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestCompareJdkRelease(t *testing.T) {
+	assert.Equal(t, 0, compareJdkRelease("1.2.3+10", "1.2.3+10"))
+	assert.Equal(t, 1, compareJdkRelease("1.2.3+11", "1.2.3+10"))
+	assert.Equal(t, 1, compareJdkRelease("1.2.3+10.1", "1.2.3+10"))
+	assert.Equal(t, 1, compareJdkRelease("1.2.3+10.2", "1.2.3+10.1"))
+	assert.Equal(t, -1, compareJdkRelease("1.2.3+10", "1.2.3+11"))
+	assert.Equal(t, -1, compareJdkRelease("1.2.3+10", "1.2.3+10.1"))
+	assert.Equal(t, -1, compareJdkRelease("1.2.3+10.1", "1.2.3+10.2"))
+}
+
 func TestParseModuleInfo(t *testing.T) {
 	assert.Equal(t, []string{"org.slf4j"}, parseModuleInfo(`
 		module com.abc {
