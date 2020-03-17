@@ -37,10 +37,10 @@ var (
 	TMP = "/tmp"
 
 	// The current EA major version
-	VERSION_EA = 14
+	VERSION_EA = 15
 
 	// The current GA major version
-	VERSION_GA = 13
+	VERSION_GA = 14
 
 	// The current LTS major version
 	VERSION_LTS = 11
