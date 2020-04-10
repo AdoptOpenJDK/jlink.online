@@ -203,7 +203,7 @@ func main() {
 }
 
 var (
-	archCheck     = regexp.MustCompile(`^(x64|x32|ppc64|s390x|ppc64le|aarch64|arm32)$`)
+	archCheck     = regexp.MustCompile(`^(x64|x32|ppc64|s390x|ppc64le|aarch64|arm)$`)
 	artifactCheck = regexp.MustCompile(`^[\w\.-]+:[\w\.-]+:[\w\.-]+$`)
 	moduleCheck   = regexp.MustCompile(`^[\w\.]+$`)
 	platformCheck = regexp.MustCompile(`^(linux|windows|mac|solaris|aix)$`)
@@ -220,7 +220,7 @@ func handleRequest(context *gin.Context, platform, arch, version, endian, implem
 
 	// Validate architecture type
 	if !archCheck.MatchString(arch) {
-		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Valid architectures: [x64, x32, ppc64, s390x, ppc64le, aarch64, arm32]"})
+		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Valid architectures: [x64, x32, ppc64, s390x, ppc64le, aarch64, arm]"})
 		return
 	}
 
