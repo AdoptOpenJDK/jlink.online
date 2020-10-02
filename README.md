@@ -68,23 +68,6 @@ The `artifacts` parameter is a comma-separated list of the Maven Central coordin
 
 **Unfortunately this can't work for dependencies that are automatic modules (because automatic modules don't specify *their* dependencies).**
 
-## API Reference
-The API responds to requests of the following form:
-```
-GET /<architecture>/<os>/<version>?endian=<endian>&implementation=<implementation>&modules=<modules>
-```
-
-| Parameter | Acceptable Values | Default |
-|---|---|---|
-| arch | `x64`, `x32`, `ppc64`, `s390x`, `ppc64le`, `aarch64`, `arm32` | N/A |
-| endian | `little`, `big` | N/A |
-| implementation | `hotspot`, `openj9` | `hotspot` |
-| modules | Any comma-separated list of JDK modules | `java.base` |
-| os | `windows`, `linux`, `mac`, `solaris`, `aix` | N/A |
-| version | A Java version string greater than or equal to `9`, `ga` for the latest general-availability release, `ea` for the latest early-access release, or `lts` for the latest long-term-support release | N/A |
-
-**Not all combinations of OS + architecture + version are available.** Please check [the AdoptOpenJDK archive](https://adoptopenjdk.net/archive.html) to ensure your target platform is supported.
-
 ## Credits
 Thanks to the following projects:
 

@@ -1,0 +1,222 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "description": "jlink.online provides optimized Java runtimes on-the-fly.",
+    "version": "1.0.0",
+    "title": "jlink.online",
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "host": "jlink.online",
+  "basePath": "/v1",
+  "tags": [
+    {
+      "name": "runtime",
+      "description": "Generate optimized runtimes"
+    }
+  ],
+  "schemes": [
+    "https",
+    "http"
+  ],
+  "paths": {
+    "/{arch}/{os}/{version}": {
+      "post": {
+        "tags": [
+          "runtime"
+        ],
+        "summary": "Generate an optimized runtime from a module-info.java file",
+        "consumes": [
+          "application/octet-stream"
+        ],
+        "produces": [
+          "application/octet-stream"
+        ],
+        "parameters": [
+          {
+            "name": "arch",
+            "in": "path",
+            "description": "The runtime architecture",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "x64",
+              "x32",
+              "ppc64",
+              "s390x",
+              "ppc64le",
+              "aarch64",
+              "arm"
+            ]
+          },
+          {
+            "name": "os",
+            "in": "path",
+            "description": "The runtime operating system",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "linux",
+              "windows",
+              "mac",
+              "solaris",
+              "aix"
+            ]
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "description": "The major Java version",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "lts",
+              "ga",
+              "ea",
+              "14",
+              "13",
+              "12",
+              "11",
+              "10",
+              "9"
+            ]
+          },
+          {
+            "name": "endian",
+            "in": "query",
+            "description": "The runtime endian-ness",
+            "type": "string",
+            "enum": [
+              "little",
+              "big"
+            ],
+            "default": "little"
+          },
+          {
+            "name": "implementation",
+            "in": "query",
+            "description": "The runtime implementation type",
+            "type": "string",
+            "enum": [
+              "hotspot",
+              "openj9"
+            ],
+            "default": "hotspot"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "runtime"
+        ],
+        "summary": "Generate an optimized runtime",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/octet-stream"
+        ],
+        "parameters": [
+          {
+            "name": "arch",
+            "in": "path",
+            "description": "The runtime architecture",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "x64",
+              "x32",
+              "ppc64",
+              "s390x",
+              "ppc64le",
+              "aarch64",
+              "arm"
+            ]
+          },
+          {
+            "name": "os",
+            "in": "path",
+            "description": "The runtime operating system",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "linux",
+              "windows",
+              "mac",
+              "solaris",
+              "aix"
+            ]
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "description": "The major Java version",
+            "required": true,
+            "type": "string",
+            "enum": [
+              "lts",
+              "ga",
+              "ea",
+              "14",
+              "13",
+              "12",
+              "11",
+              "10",
+              "9"
+            ]
+          },
+          {
+            "name": "endian",
+            "in": "query",
+            "description": "The runtime endian-ness",
+            "type": "string",
+            "enum": [
+              "little",
+              "big"
+            ],
+            "default": "little"
+          },
+          {
+            "name": "implementation",
+            "in": "query",
+            "description": "The runtime implementation type",
+            "type": "string",
+            "enum": [
+              "hotspot",
+              "openj9"
+            ],
+            "default": "hotspot"
+          },
+          {
+            "name": "modules",
+            "in": "query",
+            "description": "The module names to include in the runtime",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "default": "java.base"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation"
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        }
+      }
+    }
+  }
+}
