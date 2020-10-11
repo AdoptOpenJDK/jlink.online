@@ -12,18 +12,22 @@
 package main
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
 	"os"
 	"strings"
 )
 
-type pom struct {
-	Dependencies []dependency `xml:"dependencies>dependency"`
+type mavenPom struct {
+	Dependencies []mavenDependency `xml:"dependencies>dependency"`
 }
 
-type dependency struct {
+type mavenDependency struct {
 	GroupId    string `xml:"groupId"`
 	ArtifactId string `xml:"artifactId"`
 	Version    string `xml:"version"`
@@ -44,22 +48,18 @@ func downloadArtifacts(output string, artifacts []string) error {
 		}
 
 		base := fmt.Sprintf("https://repo1.maven.org/maven2/%s/%s/%s", strings.ReplaceAll(gav[0], ".", "/"), gav[1], gav[2])
-		err := download(mavenCentral, fmt.Sprintf("%s/%s-%s.jar", base, gav[1], gav[2]), fmt.Sprintf("%s/%s-%s.jar", output, gav[1], gav[2]))
-		if err != nil {
-			return err
-		}
-		data, err := downloadBytes(mavenCentral, fmt.Sprintf("%s/%s-%s.pom", base, gav[1], gav[2]))
+		err := downloadArtifact(fmt.Sprintf("%s/%s-%s.jar", base, gav[1], gav[2]), fmt.Sprintf("%s/%s-%s.jar", output, gav[1], gav[2]))
 		if err != nil {
 			return err
 		}
 
-		var artifactPom pom
-		if err := xml.Unmarshal(data, &artifactPom); err != nil {
+		pom, err := downloadPom(fmt.Sprintf("%s/%s-%s.pom", base, gav[1], gav[2]))
+		if err != nil {
 			return err
 		}
 
 		var depArtifacts []string
-		for _, dep := range artifactPom.Dependencies {
+		for _, dep := range pom.Dependencies {
 			// Skip test dependencies
 			if dep.Scope == "test" {
 				continue
@@ -70,6 +70,56 @@ func downloadArtifacts(output string, artifacts []string) error {
 		if err := downloadArtifacts(output, depArtifacts); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// DownloadPom downloads a POM file from Maven Central.
+func downloadPom(url string) (*mavenPom, error) {
+	log.Println("Downloading Maven Central POM:", url)
+
+	response, err := mavenCentral.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, errors.New("Status Code: " + response.Status)
+	}
+	defer response.Body.Close()
+
+	buffer := new(bytes.Buffer)
+	buffer.ReadFrom(response.Body)
+
+	var pom mavenPom
+	if err := xml.Unmarshal(buffer.Bytes(), &pom); err != nil {
+		return nil, err
+	}
+	return &pom, nil
+}
+
+// DownloadArtifact downloads an artifact from Maven Central to the filesystem.
+func downloadArtifact(url, dest string) error {
+	log.Println("Downloading Maven Central artifact:", url)
+
+	response, err := mavenCentral.Get(url)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusOK {
+		return errors.New("Status Code: " + response.Status)
+	}
+	defer response.Body.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, response.Body)
+	if err != nil {
+		return err
 	}
 
 	return nil

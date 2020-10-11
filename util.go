@@ -12,96 +12,20 @@
 package main
 
 import (
-	"bytes"
-	"errors"
-	"io"
-	"log"
 	"math/rand"
-	"net/http"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
-// CompareJdkRelease returns 1 if the release number of version1 is greater than
-// version2, -1 if version1 is less than version2, and 0 if the versions are identical.
-func compareJdkRelease(version1, version2 string) int {
-	r1 := strings.Split(version1, "+")
-	r2 := strings.Split(version2, "+")
-
-	x1 := strings.Split(r1[len(r1)-1], ".")
-	x2 := strings.Split(r2[len(r2)-1], ".")
-
-	// Normalize array lengths
-	for i := len(x2) - len(x1); i > 0; i-- {
-		x1 = append(x1, "0")
-	}
-	for i := len(x1) - len(x2); i > 0; i-- {
-		x2 = append(x2, "0")
-	}
-
-	// Perform comparison
-	for i, _ := range x1 {
-		y1, _ := strconv.Atoi(x1[i])
-		y2, _ := strconv.Atoi(x2[i])
-
-		if y1 > y2 {
-			return 1
-		} else if y1 < y2 {
-			return -1
-		}
-	}
-
-	return 0
-}
-
-func download(client *http.Client, source, dest string) error {
-	log.Println("Downloading:", source)
-
-	res, err := client.Get(source)
-	if err != nil {
-		return err
-	}
-	if res.StatusCode != http.StatusOK {
-		return errors.New("Status Code: " + res.Status)
-	}
-	defer res.Body.Close()
-
-	out, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, res.Body)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func downloadBytes(client *http.Client, source string) ([]byte, error) {
-	log.Println("Downloading:", source)
-
-	res, err := client.Get(source)
-	if err != nil {
-		return nil, err
-	}
-	if res.StatusCode != http.StatusOK {
-		return nil, errors.New("Status Code: " + res.Status)
-	}
-	defer res.Body.Close()
-
-	b := new(bytes.Buffer)
-	b.ReadFrom(res.Body)
-	return b.Bytes(), nil
-}
-
 // GetMajorVersion returns the major version field from a Java version string.
 func getMajorVersion(version string) (int, error) {
 	if i := strings.Index(version, "."); i != -1 {
+		version = version[:i]
+	}
+
+	if i := strings.Index(version, "+"); i != -1 {
 		version = version[:i]
 	}
 
@@ -122,14 +46,14 @@ func parseModuleInfo(file string) []string {
 
 // NewTemporaryFile returns a new temporary file and its parent directory.
 func newTemporaryFile(filename string) (string, string) {
-	dir := TMP + "/" + strconv.Itoa(rand.Int())
+	dir := TMP + string(os.PathSeparator) + strconv.Itoa(rand.Int())
 	_ = os.MkdirAll(dir, os.ModePerm)
-	return dir + "/" + filename, dir
+	return dir + string(os.PathSeparator) + filename, dir
 }
 
 // NewTemporaryDirectory returns a new temporary directory and its parent directory.
 func newTemporaryDirectory(dirname string) (string, string) {
-	dir := TMP + "/" + strconv.Itoa(rand.Int())
+	dir := TMP + string(os.PathSeparator) + strconv.Itoa(rand.Int())
 	_ = os.MkdirAll(dir+"/"+dirname, os.ModePerm)
-	return dir + "/" + dirname, dir
+	return dir + string(os.PathSeparator) + dirname, dir
 }

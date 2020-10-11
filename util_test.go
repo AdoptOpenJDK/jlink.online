@@ -17,14 +17,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCompareJdkRelease(t *testing.T) {
-	assert.Equal(t, 0, compareJdkRelease("1.2.3+10", "1.2.3+10"))
-	assert.Equal(t, 1, compareJdkRelease("1.2.3+11", "1.2.3+10"))
-	assert.Equal(t, 1, compareJdkRelease("1.2.3+10.1", "1.2.3+10"))
-	assert.Equal(t, 1, compareJdkRelease("1.2.3+10.2", "1.2.3+10.1"))
-	assert.Equal(t, -1, compareJdkRelease("1.2.3+10", "1.2.3+11"))
-	assert.Equal(t, -1, compareJdkRelease("1.2.3+10", "1.2.3+10.1"))
-	assert.Equal(t, -1, compareJdkRelease("1.2.3+10.1", "1.2.3+10.2"))
+func TestGetMajorVersion(t *testing.T) {
+	m, err := getMajorVersion("9")
+	assert.Equal(t, 9, m)
+	assert.NoError(t, err)
+
+	m, err = getMajorVersion("9.1")
+	assert.Equal(t, 9, m)
+	assert.NoError(t, err)
+
+	m, err = getMajorVersion("9+1")
+	assert.Equal(t, 9, m)
+	assert.NoError(t, err)
+
+	m, err = getMajorVersion("9.0.1")
+	assert.Equal(t, 9, m)
+	assert.NoError(t, err)
+
+	m, err = getMajorVersion("9a.1")
+	assert.Error(t, err)
 }
 
 func TestParseModuleInfo(t *testing.T) {

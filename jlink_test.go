@@ -14,8 +14,11 @@ package main
 import (
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -23,15 +26,24 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func assertRequestSuccess(t *testing.T, req, filetype string) {
+func assertRequestSuccess(t *testing.T, req, platform string) {
 	res, err := http.Get(req)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 200, res.StatusCode)
 	defer res.Body.Close()
 
-	archive, dir := newTemporaryFile("jdk" + filetype)
-	defer os.RemoveAll(dir)
+	var archive string
+	switch platform {
+	case "windows":
+		var dir string
+		archive, dir = newTemporaryFile("jdk.zip")
+		defer os.RemoveAll(dir)
+	default:
+		var dir string
+		archive, dir = newTemporaryFile("jdk.tar.gz")
+		defer os.RemoveAll(dir)
+	}
 
 	out, err := os.Create(archive)
 	assert.NoError(t, err)
@@ -51,12 +63,28 @@ func assertRequestSuccess(t *testing.T, req, filetype string) {
 	files, err := ioutil.ReadDir(output)
 	assert.NoError(t, err)
 	for _, f := range files {
-		if filetype == ".zip" {
-			_, err := os.Stat(output + "/" + f.Name() + "/bin/java.exe")
+		switch platform {
+		case "windows":
+			_, err := os.Stat(filepath.FromSlash(output + "/" + f.Name() + "/bin/java.exe"))
 			assert.NoError(t, err)
-		} else {
-			_, err := os.Stat(output + "/" + f.Name() + "/bin/java")
+		default:
+			_, err := os.Stat(filepath.FromSlash(output + "/" + f.Name() + "/bin/java"))
 			assert.NoError(t, err)
+		}
+	}
+
+	// Execute "java --version" according to the test platform
+	if LOCAL_PLATFORM == platform {
+		log.Println("Executing 'java --version' on local platform")
+		for _, f := range files {
+			switch platform {
+			case "windows":
+				cmd := exec.Command(filepath.FromSlash(output+"/"+f.Name()+"/bin/java.exe"), "--version")
+				assert.NoError(t, cmd.Run())
+			default:
+				cmd := exec.Command(filepath.FromSlash(output+"/"+f.Name()+"/bin/java"), "--version")
+				assert.NoError(t, cmd.Run())
+			}
 		}
 	}
 }
@@ -70,25 +98,41 @@ func assertRequestFailure(t *testing.T, req string, expectedCode int) {
 
 func TestJlink(t *testing.T) {
 	os.Setenv("PORT", "8080")
-	os.Setenv("CACHE", "/tmp/cache")
 	go main()
 
 	// Allow the server some time to start
 	time.Sleep(4 * time.Second)
 
-	assertRequestSuccess(t, "http://localhost:8080/x64/linux/13?modules=java.base", ".tar.gz")
-	assertRequestSuccess(t, "http://localhost:8080/x64/windows/13?modules=java.base", ".zip")
-	assertRequestSuccess(t, "http://localhost:8080/x64/mac/13?modules=java.base", ".tar.gz")
+	assertRequestSuccess(t, "http://localhost:8080/x64/linux/11.0.8+10?modules=java.base", "linux")
+	assertRequestSuccess(t, "http://localhost:8080/x64/windows/11.0.8+10?modules=java.base", "windows")
+	assertRequestSuccess(t, "http://localhost:8080/x64/mac/11.0.8+10?modules=java.base", "mac")
+	assertRequestSuccess(t, "http://localhost:8080/ppc64/aix/11.0.8+10?modules=java.base", "aix")
 
 	// Invalid architecture
-	assertRequestFailure(t, "http://localhost:8080/a/windows/13", 400)
+	assertRequestFailure(t, "http://localhost:8080/a/windows/11.0.8+10", 400)
 	// Invalid OS
-	assertRequestFailure(t, "http://localhost:8080/x64/a/13", 400)
+	assertRequestFailure(t, "http://localhost:8080/x64/a/11.0.8+10", 400)
 	// Invalid version
 	assertRequestFailure(t, "http://localhost:8080/x64/windows/1a3", 400)
 	// Nonexistent version
 	assertRequestFailure(t, "http://localhost:8080/x64/windows/99", 400)
 	// Invalid module
-	assertRequestFailure(t, "http://localhost:8080/x64/windows/13?modules=123", 400)
-	assertRequestFailure(t, "http://localhost:8080/x64/windows/13?modules=&", 400)
+	assertRequestFailure(t, "http://localhost:8080/x64/windows/11.0.8+10?modules=123", 400)
+	assertRequestFailure(t, "http://localhost:8080/x64/windows/11.0.8+10?modules=&", 400)
+}
+
+func TestVersionRegex(t *testing.T) {
+	assert.True(t, versionCheck.MatchString("9"))
+	assert.True(t, versionCheck.MatchString("9+1"))
+	assert.True(t, versionCheck.MatchString("9.1"))
+	assert.True(t, versionCheck.MatchString("9.0.1"))
+	assert.True(t, versionCheck.MatchString("9.0.1+11"))
+	assert.True(t, versionCheck.MatchString("9.0.1+11.2"))
+
+	assert.False(t, versionCheck.MatchString("9.0.0"))
+	assert.False(t, versionCheck.MatchString("9."))
+	assert.False(t, versionCheck.MatchString("9+"))
+	assert.False(t, versionCheck.MatchString("9.+1"))
+	assert.False(t, versionCheck.MatchString(".9"))
+	assert.False(t, versionCheck.MatchString("09"))
 }

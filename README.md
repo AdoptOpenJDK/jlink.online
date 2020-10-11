@@ -1,38 +1,24 @@
-**jlink.online** is a HTTP microservice that builds minimized Java runtimes on the fly.
+**jlink.online** is a HTTP microservice that builds optimized/minimized Java runtimes on the fly.
 
-## Motivation
-As of Java 9, the JDK now includes a tool called `jlink` that can build optimized runtimes for modular Java applications. Using an optimized runtime is a good idea when deploying to a production environment (due to space savings and a reduced attack surface\*) or when bundling a platform-specific runtime to distribute with your application.
+:boom: This project is currently experimental and subject to change at any time. :boom:
 
-This project is basically a wrapper for Java's `jlink` utility that makes it faster and easier to build custom Java runtimes. Just send it a request containing the names of the modules you need and **jlink.online** will automatically fetch the appropriate JDK, run `jlink` to produce a minimal runtime, then return that compressed runtime in the response body.
+## Introduction
+This project is a wrapper for Java's `jlink` utility that makes it faster and easier to build custom Java runtimes for an application. Just send it a HTTP request and **jlink.online** fetches the appropriate JDK [from AdoptOpenJDK](https://github.com/AdoptOpenJDK), runs `jlink` to produce a custom runtime image containing your dependencies, then returns that compressed runtime in the response.
 
-\* <sup>Reduced attack surface might be wishful thinking</sup>
+Using an optimized runtime is a good idea when deploying to a production environment or when bundling a platform-specific runtime to distribute with your application. For many applications, a `jlink`'d runtime will be significantly smaller in size.
+
 ## Usage Examples
-#### Download the latest Java 13 release for Linux x64 (containing `java.base` only)
+#### Download a minimized Java 11 runtime for Linux x64 (containing `java.base` only)
 ```
-https://jlink.online/x64/linux/13
-```
-
-#### Download the latest Java 13.0.1 release for Linux x64 (containing `java.desktop` and `jdk.zipfs`)
-```
-https://jlink.online/x64/linux/13.0.1?modules=java.desktop,jdk.zipfs
+https://jlink.online/x64/linux/11.0.8+10
 ```
 
-#### Download the latest Java LTS release for Windows x64 (also works with `ea` and `ga`)
+#### Download a minimized Java 11 runtime for Linux x64 (containing `java.desktop` and `jdk.zipfs`)
 ```
-https://jlink.online/x64/windows/lts
-```
-
-#### Download the latest Java GA release (OpenJ9 JVM implementation)
-```
-https://jlink.online/x64/linux/ga?implementation=openj9
+https://jlink.online/x64/linux/11.0.8+10?modules=java.desktop,jdk.zipfs
 ```
 
-#### Download the latest Java 12 release for Linux S390X (big endian)
-```
-https://jlink.online/s390x/linux/12?endian=big
-```
-
-#### Download a runtime in a Dockerfile
+#### Download a minimized runtime in a Dockerfile
 ```sh
 # If you do 'FROM openjdk' then you'll get a full runtime
 FROM alpine:latest
@@ -41,9 +27,9 @@ FROM alpine:latest
 RUN apk add curl
 
 # Install custom runtime
-RUN curl -G 'https://jlink.online/x64/linux/lts' \
-  -d modules=java.base \
-  | tar zxf -
+RUN curl -G 'https://jlink.online/x64/linux/11.0.8+10' \
+    -d modules=java.base \
+    | tar zxf -
 
 # Install application
 # ...
@@ -53,18 +39,19 @@ RUN curl -G 'https://jlink.online/x64/linux/lts' \
 Suppose your application has the following module definition:
 ```java
 module com.github.example {
-	requires org.slf4j;
+    requires org.slf4j;
+    ...
 }
 ```
 
-Then to build a custom runtime containing your dependencies, you can send a POST request containing the contents of your `module-info.java`:
+Then to build a custom runtime containing your dependencies, you can send a POST request containing your `module-info.java`:
 ```sh
 curl --data-binary @com.github.example/src/main/java/module-info.java \
-  'https://jlink.online/x64/linux/lts?artifacts=org.slf4j:slf4j-api:2.0.0-alpha1' \
+  'https://jlink.online/x64/linux/11.0.8+10?artifacts=org.slf4j:slf4j-api:2.0.0-alpha1' \
   --output app_runtime.tar.gz
 ```
 
-The `artifacts` parameter is a comma-separated list of the Maven Central coordinates of your dependencies. This is required to know what versions to include in your runtime.
+The `artifacts` parameter is a comma-separated list of the Maven Central coordinates of your dependencies. This is required to know what versions to include in your runtime. In the future, we may be able to get this information from a `build.gradle` or `pom.xml` which would be much more convenient.
 
 **Unfortunately this can't work for dependencies that are automatic modules (because automatic modules don't specify *their* dependencies).**
 

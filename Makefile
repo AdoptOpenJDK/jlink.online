@@ -5,7 +5,7 @@ test:
 	@go test
 
 run:
-	@go run jlink.go util.go maven_central.go adoptopenjdk.go
+	@go run jlink.go util.go maven_central.go adoptium.go
 
 build:
 	@docker build -t 'jlink.online:latest' .

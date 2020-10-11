@@ -10,7 +10,7 @@
     }
   },
   "host": "jlink.online",
-  "basePath": "/v1",
+  "basePath": "",
   "tags": [
     {
       "name": "runtime",
@@ -70,18 +70,7 @@
             "in": "path",
             "description": "The major Java version",
             "required": true,
-            "type": "string",
-            "enum": [
-              "lts",
-              "ga",
-              "ea",
-              "14",
-              "13",
-              "12",
-              "11",
-              "10",
-              "9"
-            ]
+            "type": "string"
           },
           {
             "name": "endian",
@@ -162,18 +151,7 @@
             "in": "path",
             "description": "The major Java version",
             "required": true,
-            "type": "string",
-            "enum": [
-              "lts",
-              "ga",
-              "ea",
-              "14",
-              "13",
-              "12",
-              "11",
-              "10",
-              "9"
-            ]
+            "type": "string"
           },
           {
             "name": "endian",

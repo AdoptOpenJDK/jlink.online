@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,41 +32,33 @@ var (
 	PORT = "80"
 
 	// A cache directory for base runtimes
-	RT_CACHE = "/runtime_cache"
+	RT_CACHE = filepath.FromSlash(os.TempDir() + "/runtime_cache")
 
-	// A memory filesystem for short-lived files
-	TMP = "/tmp"
-
-	// The current EA major version
-	VERSION_EA = 15
-
-	// The current GA major version
-	VERSION_GA = 14
-
-	// The current LTS major version
-	VERSION_LTS = 11
+	// A directory for short-lived files
+	TMP = os.TempDir()
 
 	// Whether Maven Central integration is enabled
 	MAVEN_CENTRAL = false
+
+	// The platform for local runtimes
+	LOCAL_PLATFORM = "linux"
+
+	// The architecture for local runtimes
+	LOCAL_ARCH = "x64"
 )
 
-// A client for downloading AdoptOpenJDK releases
-var github = &http.Client{
-	Timeout: time.Second * 60,
-}
-
-// A client for querying release metadata from api.adoptopenjdk.net
-var adoptOpenJdk = &http.Client{
-	Timeout: time.Second * 10,
+// A client for downloading artifacts and release metadata from api.adoptopenjdk.net
+var adoptium = &http.Client{
+	Timeout: time.Second * 120,
 }
 
 // A client for downloading Maven Central artifacts
 var mavenCentral = &http.Client{
-	Timeout: time.Second * 30,
+	Timeout: time.Second * 60,
 }
 
-// RuntimeReq represents an incoming request from the JSON endpoint.
-type runtimeReq struct {
+// RuntimeRequest represents an incoming request from the JSON endpoint.
+type runtimeRequest struct {
 
 	// Maven Central artifacts in G:A:V format
 	Artifacts []string `json:"artifacts"`
@@ -90,16 +83,6 @@ type runtimeReq struct {
 }
 
 func main() {
-	if _, exists := os.LookupEnv("UPDATE_CACHE"); exists {
-		if err := updateLocalReleaseCache(); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-
-	if err := loadLocalReleaseCache(); err != nil {
-		log.Fatal(err)
-	}
 
 	router := gin.Default()
 
@@ -114,7 +97,21 @@ func main() {
 			log.Fatal("Invalid value for MAVEN_CENTRAL flag")
 		}
 	}
-	if cache, exists := os.LookupEnv("CACHE"); exists {
+	if platform, exists := os.LookupEnv("TRAVIS_OS_NAME"); exists {
+		switch platform {
+		case "osx":
+			LOCAL_PLATFORM = "mac"
+		default:
+			LOCAL_PLATFORM = platform
+		}
+	}
+	if platform, exists := os.LookupEnv("LOCAL_PLATFORM"); exists {
+		LOCAL_PLATFORM = platform
+	}
+	if arch, exists := os.LookupEnv("LOCAL_ARCH"); exists {
+		LOCAL_ARCH = arch
+	}
+	if cache, exists := os.LookupEnv("RT_CACHE"); exists {
 		RT_CACHE = cache
 	}
 	if tmp, exists := os.LookupEnv("TMP"); exists {
@@ -155,7 +152,7 @@ func main() {
 
 	// An endpoint for runtime requests (JSON)
 	router.POST("/", func(context *gin.Context) {
-		var req runtimeReq
+		var req runtimeRequest
 
 		err := context.BindJSON(&req)
 		if err != nil {
@@ -207,7 +204,7 @@ var (
 	artifactCheck = regexp.MustCompile(`^[\w\.-]+:[\w\.-]+:[\w\.-]+$`)
 	moduleCheck   = regexp.MustCompile(`^[\w\.]+$`)
 	platformCheck = regexp.MustCompile(`^(linux|windows|mac|solaris|aix)$`)
-	versionCheck  = regexp.MustCompile(`^[1-9][0-9]*((\.0)*\.[1-9][0-9]*)*$`)
+	versionCheck  = regexp.MustCompile(`^[1-9][0-9]*((\.0)*\.[1-9][0-9]*)*(\+[1-9][0-9]*((\.0)*\.[1-9][0-9]*)*)?$`)
 )
 
 func handleRequest(context *gin.Context, platform, arch, version, endian, implementation string, modules, artifacts []string) {
@@ -239,10 +236,6 @@ func handleRequest(context *gin.Context, platform, arch, version, endian, implem
 			return
 		}
 	}
-	if len(modules) < 1 {
-		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "At least one module is required"})
-		return
-	}
 
 	// Validate endian type
 	if endian == "" {
@@ -264,71 +257,62 @@ func handleRequest(context *gin.Context, platform, arch, version, endian, implem
 		return
 	}
 
-	var release *releaseBinary
-	var jdkRelease *releaseBinary
-
-	switch version {
-	case "lts":
-		release, _ = lookupLatestRelease(arch, platform, implementation, VERSION_LTS)
-		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, VERSION_LTS)
-	case "ea":
-		release, _ = lookupLatestRelease(arch, platform, implementation, VERSION_EA)
-		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, VERSION_EA)
-	case "ga":
-		release, _ = lookupLatestRelease(arch, platform, implementation, VERSION_GA)
-		jdkRelease, _ = lookupLatestRelease("x64", "linux", implementation, VERSION_GA)
-	default:
-		// Validate version number
-		if !versionCheck.MatchString(version) {
-			context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Invalid Java version"})
-			return
-		}
-
-		// Validate major version number
-		majorVersion, err := getMajorVersion(version)
-		if err != nil || majorVersion < 9 {
-			context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Invalid Java version"})
-			return
-		}
-
-		release, _ = lookupRelease(arch, platform, implementation, version)
-		jdkRelease, _ = lookupRelease("x64", "linux", implementation, version)
-	}
-
-	if release == nil || jdkRelease == nil {
-		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to find release"})
+	// Validate version number
+	if !versionCheck.MatchString(version) {
+		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Invalid Java version"})
 		return
 	}
 
-	// Download a linux runtime containing a compatible version of jlink
-	jdk, err := downloadRelease(jdkRelease)
+	// Validate major version number
+	majorVersion, err := getMajorVersion(version)
+	if err != nil || majorVersion < 9 {
+		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Invalid Java version"})
+		return
+	}
+
+	// Lookup the target runtime whose modules will be packaged into a new runtime image
+	target, err := lookupRelease(arch, platform, implementation, version)
 	if err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to download runtime"})
+		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to find target runtime"})
+		return
+	}
+
+	// Lookup a runtime containing a compatible version of jlink for local use
+	local, err := lookupRelease(LOCAL_ARCH, LOCAL_PLATFORM, implementation, version)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to find local runtime"})
+		return
+	}
+
+	// Download the local runtime
+	localRuntimePath, err := downloadRelease(local, version)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to download local runtime"})
 		log.Println(err)
 		return
 	}
 
 	// Download the target runtime
-	runtime, err := downloadRelease(release)
+	targetRuntimePath, err := downloadRelease(target, version)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to download target runtime"})
 		log.Println(err)
 		return
 	}
 
-	// Create a directory for Maven artifacts
-	m2, dir := newTemporaryDirectory("m2")
+	// Create a directory for Maven Central artifacts
+	mavenCentral, dir := newTemporaryDirectory("mavenCentral")
 	defer os.RemoveAll(dir)
 
 	// Download any required artifacts
-	if err := downloadArtifacts(m2, artifacts); err != nil {
-		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to download artifacts"})
+	if err := downloadArtifacts(mavenCentral, artifacts); err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to download Maven Central artifacts"})
 		log.Println(err)
 		return
 	}
 
-	// Run jlink on the downloaded runtime
-	archive, err := jlink(jdk, m2, runtime, endian, modules, release)
+	// Run jlink on the target runtime
+	archive, err := jlink(localRuntimePath, mavenCentral, targetRuntimePath, endian, version, platform, target.Package.Name, modules)
 	if err != nil {
 		context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "Failed to generate runtime"})
 		log.Println(err)
@@ -336,30 +320,84 @@ func handleRequest(context *gin.Context, platform, arch, version, endian, implem
 	}
 
 	context.DataFromReader(http.StatusOK, int64(archive.Len()), "application/octet-stream", archive, map[string]string{
-		"Content-Disposition": "attachment; filename=\"" + release.FileName + "\"",
+		"Content-Disposition": "attachment; filename=\"" + target.Package.Name + "\"",
 		"Accept-Ranges":       "bytes",
 	})
 }
 
 // Jlink uses a standard JDK runtime to generate a custom runtime image
 // for the given set of modules.
-func jlink(jdk, m2, runtime, endian string, modules []string, release *releaseBinary) (*bytes.Buffer, error) {
+func jlink(jdk, mavenCentral, runtime, endian, version, platform, filename string, modules []string) (*bytes.Buffer, error) {
 
-	if err := os.Chmod(jdk+"/bin/jlink", os.ModePerm); err != nil {
+	var modulePath, jlink string
+
+	// Add the base module if it's not there
+	base := false
+	for _, m := range modules {
+		if m == "java.base" {
+			base = true
+			break
+		}
+	}
+	if !base {
+		modules = append(modules, "java.base")
+	}
+
+	output, dir := newTemporaryFile("jdk-" + version)
+	defer os.RemoveAll(dir)
+
+	// Build module path according to target platform
+	switch platform {
+	case "mac":
+		modulePath = filepath.FromSlash(runtime + "/Contents/Home/jmods" + string(os.PathListSeparator) + mavenCentral)
+	case "windows":
+		modulePath = filepath.FromSlash(runtime + "/jmods" + string(os.PathListSeparator) + mavenCentral)
+	default:
+		modulePath = filepath.FromSlash(runtime + "/jmods" + string(os.PathListSeparator) + mavenCentral)
+	}
+
+	// Build jlink command according to local platform
+	switch LOCAL_PLATFORM {
+	case "mac":
+		jlink = filepath.FromSlash(jdk + "/Contents/Home/bin/jlink")
+	case "windows":
+		jlink = filepath.FromSlash(jdk + "/bin/jlink.exe")
+	default:
+		jlink = filepath.FromSlash(jdk + "/bin/jlink")
+	}
+
+	if err := os.Chmod(jlink, os.ModePerm); err != nil {
 		return nil, err
 	}
 
-	output, dir := newTemporaryFile("jdk-" + release.ReleaseVersion.Version)
-	defer os.RemoveAll(dir)
+	cmd := exec.Command(jlink,
+		// Share string constants
+		"--compress=1",
+		// Exclude headers
+		"--no-header-files",
+		// Exclude man pages
+		"--no-man-pages",
+		// Remove debug information
+		"--strip-debug",
+		// The target endian-ness
+		"--endian", endian,
+		// The path where modules can be found
+		"--module-path", modulePath,
+		// The selected modules
+		"--add-modules", strings.Join(modules, ","),
+		// The output directory
+		"--output", output)
 
-	cmd := exec.Command(jdk+"/bin/jlink", "--compress=0", "--no-header-files", "--no-man-pages", "--endian", endian, "--module-path", runtime+"/jmods:"+m2, "--add-modules", strings.Join(modules, ","), "--output", output)
-	log.Println("Executing:", cmd.Args)
+	log.Println("JLINK:", cmd.Args)
 	if err := cmd.Run(); err != nil {
 		return nil, err
 	}
 
-	archive, dir := newTemporaryFile(release.FileName)
+	archive, dir := newTemporaryFile(filename)
 	defer os.RemoveAll(dir)
+
+	// TODO: archiver can't handle symlinks in this directory
+	_ = os.RemoveAll(filepath.FromSlash(output + "/legal"))
 
 	if err := archiver.Archive([]string{output}, archive); err != nil {
 		return nil, err

@@ -5,6 +5,11 @@ go_import_path: github.com/adoptopenjdk/jlink.online
 go:
   - 1.14.x
 
+os:
+  - linux
+  - osx
+  - windows
+
 script:
   - go test -coverprofile=coverage.txt -covermode=atomic
 
