@@ -4,6 +4,6 @@ go 1.14
 
 require (
 	github.com/gin-gonic/gin v1.6.3
-	github.com/mholt/archiver/v3 v3.3.2
+	github.com/mholt/archiver/v3 v3.4.0
 	github.com/stretchr/testify v1.6.1
 )
