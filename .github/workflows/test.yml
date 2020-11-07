@@ -8,8 +8,11 @@ on:
 
 jobs:
   build:
-    name: "Build and Test"
-    runs-on: ubuntu-latest
+    name: "Build and Test on ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
     steps:
 
     - name: Set up Go
