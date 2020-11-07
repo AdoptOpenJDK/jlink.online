@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -41,7 +42,7 @@ var (
 	MAVEN_CENTRAL = false
 
 	// The platform for local runtimes
-	LOCAL_PLATFORM = "linux"
+	LOCAL_PLATFORM = determineLocalPlatform()
 
 	// The architecture for local runtimes
 	LOCAL_ARCH = "x64"
@@ -96,17 +97,6 @@ func main() {
 		} else {
 			log.Fatal("Invalid value for MAVEN_CENTRAL flag")
 		}
-	}
-	if platform, exists := os.LookupEnv("TRAVIS_OS_NAME"); exists {
-		switch platform {
-		case "osx":
-			LOCAL_PLATFORM = "mac"
-		default:
-			LOCAL_PLATFORM = platform
-		}
-	}
-	if platform, exists := os.LookupEnv("LOCAL_PLATFORM"); exists {
-		LOCAL_PLATFORM = platform
 	}
 	if arch, exists := os.LookupEnv("LOCAL_ARCH"); exists {
 		LOCAL_ARCH = arch
@@ -413,4 +403,23 @@ func jlink(jdk, mavenCentral, runtime, endian, version, platform, filename strin
 	buffer.ReadFrom(f)
 
 	return &buffer, nil
+}
+
+func determineLocalPlatform() string {
+	var localPlatform string
+	if platform, exists := os.LookupEnv("LOCAL_PLATFORM"); exists {
+		localPlatform = platform
+	} else {
+		// For a list of possible values, run: go tool dist list
+		localPlatform = runtime.GOOS
+	}
+
+	// See https://api.adoptopenjdk.net/swagger-ui/#/Binary/get_v3_binary_latest__feature_version___release_type___os___arch___image_type___jvm_impl___heap_size___vendor_
+	// for a list of accepted platforms by AdoptOpenJDK.
+	switch localPlatform {
+	case "darwin":
+		return "mac"
+	default:
+		return localPlatform
+	}
 }

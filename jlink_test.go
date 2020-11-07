@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -135,4 +136,23 @@ func TestVersionRegex(t *testing.T) {
 	assert.False(t, versionCheck.MatchString("9.+1"))
 	assert.False(t, versionCheck.MatchString(".9"))
 	assert.False(t, versionCheck.MatchString("09"))
+}
+
+func TestDetermineLocalPlatform(t *testing.T) {
+	expectedPlatform := runtime.GOOS
+	if expectedPlatform == "darwin" {
+		expectedPlatform = "mac"
+	}
+
+	assert.Equal(t, "", os.Getenv("LOCAL_PLATFORM"))
+	assert.Equal(t, expectedPlatform, determineLocalPlatform())
+
+	os.Setenv("LOCAL_PLATFORM", "darwin")
+	assert.Equal(t, "mac", determineLocalPlatform())
+
+	os.Setenv("LOCAL_PLATFORM", "windows")
+	assert.Equal(t, "windows", determineLocalPlatform())
+
+	os.Setenv("LOCAL_PLATFORM", "mydiyos")
+	assert.Equal(t, "mydiyos", determineLocalPlatform())
 }
