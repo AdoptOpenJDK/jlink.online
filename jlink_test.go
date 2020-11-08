@@ -13,12 +13,11 @@ package main
 
 import (
 	"io"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"testing"
 	"time"
@@ -27,7 +26,69 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func assertRequestSuccess(t *testing.T, req, platform string) {
+// Execute the "java --version" command on the generated runtime
+func assertJavaVersion(t *testing.T, output, version, platform string) {
+
+	checkOpenjdkVersion := regexp.MustCompile("(?m)AdoptOpenJDK \\(build " + regexp.QuoteMeta(version) + "\\)")
+
+	if LOCAL_PLATFORM == platform {
+		switch platform {
+		case "windows":
+			out, err := exec.Command(filepath.FromSlash(output+"/jdk-"+version+"/bin/java.exe"), "--version").Output()
+			assert.NoError(t, err)
+
+			assert.True(t, checkOpenjdkVersion.MatchString(string(out)))
+		default:
+			out, err := exec.Command(filepath.FromSlash(output+"/jdk-"+version+"/bin/java"), "--version").Output()
+			assert.NoError(t, err)
+
+			assert.True(t, checkOpenjdkVersion.MatchString(string(out)))
+		}
+	}
+}
+
+// Ensure several important files are present in the generated runtime
+func assertRuntimeContents(t *testing.T, output, version, platform string) {
+
+	switch platform {
+	case "windows":
+		_, err := os.Stat(filepath.FromSlash(output + "/jdk-" + version + "/bin/java.exe"))
+		assert.NoError(t, err)
+	default:
+		_, err := os.Stat(filepath.FromSlash(output + "/jdk-" + version + "/bin/java"))
+		assert.NoError(t, err)
+	}
+}
+
+// Ensure no files are present from the wrong platform
+func assertNoCrossPlatformFiles(t *testing.T, output, platform string) {
+
+	checkWindowsExclusive := regexp.MustCompile("\\.(dll|exe)$")
+	checkMacExclusive := regexp.MustCompile("\\.(dylib)$")
+	checkLinuxExclusive := regexp.MustCompile("\\.(so)$")
+
+	err := filepath.Walk(output, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		switch platform {
+		case "windows":
+			assert.False(t, checkMacExclusive.MatchString(info.Name()))
+			assert.False(t, checkLinuxExclusive.MatchString(info.Name()))
+		case "linux":
+			assert.False(t, checkMacExclusive.MatchString(info.Name()))
+			assert.False(t, checkWindowsExclusive.MatchString(info.Name()))
+		case "mac":
+			assert.False(t, checkWindowsExclusive.MatchString(info.Name()))
+			assert.False(t, checkLinuxExclusive.MatchString(info.Name()))
+		}
+		return nil
+	})
+	assert.NoError(t, err)
+}
+
+func assertRequestSuccess(t *testing.T, req, version, platform string) {
 	res, err := http.Get(req)
 
 	assert.NoError(t, err)
@@ -61,33 +122,9 @@ func assertRequestSuccess(t *testing.T, req, platform string) {
 		assert.NoError(t, err)
 	}
 
-	files, err := ioutil.ReadDir(output)
-	assert.NoError(t, err)
-	for _, f := range files {
-		switch platform {
-		case "windows":
-			_, err := os.Stat(filepath.FromSlash(output + "/" + f.Name() + "/bin/java.exe"))
-			assert.NoError(t, err)
-		default:
-			_, err := os.Stat(filepath.FromSlash(output + "/" + f.Name() + "/bin/java"))
-			assert.NoError(t, err)
-		}
-	}
-
-	// Execute "java --version" according to the test platform
-	if LOCAL_PLATFORM == platform {
-		log.Println("Executing 'java --version' on local platform")
-		for _, f := range files {
-			switch platform {
-			case "windows":
-				cmd := exec.Command(filepath.FromSlash(output+"/"+f.Name()+"/bin/java.exe"), "--version")
-				assert.NoError(t, cmd.Run())
-			default:
-				cmd := exec.Command(filepath.FromSlash(output+"/"+f.Name()+"/bin/java"), "--version")
-				assert.NoError(t, cmd.Run())
-			}
-		}
-	}
+	assertRuntimeContents(t, output, version, platform)
+	assertNoCrossPlatformFiles(t, output, platform)
+	assertJavaVersion(t, output, version, platform)
 }
 
 func assertRequestFailure(t *testing.T, req string, expectedCode int) {
@@ -104,10 +141,10 @@ func TestJlink(t *testing.T) {
 	// Allow the server some time to start
 	time.Sleep(4 * time.Second)
 
-	assertRequestSuccess(t, "http://localhost:8080/x64/linux/11.0.8+10?modules=java.base", "linux")
-	assertRequestSuccess(t, "http://localhost:8080/x64/windows/11.0.8+10?modules=java.base", "windows")
-	assertRequestSuccess(t, "http://localhost:8080/x64/mac/11.0.8+10?modules=java.base", "mac")
-	assertRequestSuccess(t, "http://localhost:8080/ppc64/aix/11.0.8+10?modules=java.base", "aix")
+	assertRequestSuccess(t, "http://localhost:8080/x64/linux/11.0.8+10?modules=java.base", "11.0.8+10", "linux")
+	assertRequestSuccess(t, "http://localhost:8080/x64/windows/11.0.8+10?modules=java.base", "11.0.8+10", "windows")
+	assertRequestSuccess(t, "http://localhost:8080/x64/mac/11.0.8+10?modules=java.base", "11.0.8+10", "mac")
+	assertRequestSuccess(t, "http://localhost:8080/ppc64/aix/11.0.8+10?modules=java.base", "11.0.8+10", "aix")
 
 	// Invalid architecture
 	assertRequestFailure(t, "http://localhost:8080/a/windows/11.0.8+10", 400)

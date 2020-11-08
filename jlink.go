@@ -339,10 +339,25 @@ func jlink(jdk, mavenCentral, runtime, endian, version, platform, filename strin
 	// Build module path according to target platform
 	switch platform {
 	case "mac":
+		_, err := os.Stat(filepath.FromSlash(runtime + "/Contents/Home/jmods"))
+		if err != nil {
+			return nil, err
+		}
+
 		modulePath = filepath.FromSlash(runtime + "/Contents/Home/jmods" + string(os.PathListSeparator) + mavenCentral)
 	case "windows":
+		_, err := os.Stat(filepath.FromSlash(runtime + "/jmods"))
+		if err != nil {
+			return nil, err
+		}
+
 		modulePath = filepath.FromSlash(runtime + "/jmods" + string(os.PathListSeparator) + mavenCentral)
 	default:
+		_, err := os.Stat(filepath.FromSlash(runtime + "/jmods"))
+		if err != nil {
+			return nil, err
+		}
+
 		modulePath = filepath.FromSlash(runtime + "/jmods" + string(os.PathListSeparator) + mavenCentral)
 	}
 

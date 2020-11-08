@@ -124,6 +124,7 @@ func downloadRelease(binary *adoptiumBinary, version string) (string, error) {
 
 	// Extract to the cache directory
 	if err := archiver.Unarchive(archivePath, runtimePath); err != nil {
+		os.RemoveAll(runtimePath)
 		return "", err
 	}
 
