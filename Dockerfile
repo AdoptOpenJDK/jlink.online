@@ -16,6 +16,6 @@ ENV MAVEN_CENTRAL=false
 ENV RT_CACHE=/app/runtimes
 ENV TMP=/app/tmp
 
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["./main"]
