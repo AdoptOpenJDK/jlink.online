@@ -23,9 +23,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"io/ioutil"
+	"html/template"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mholt/archiver/v3"
+	"github.com/russross/blackfriday"
 )
 
 var (
@@ -87,6 +90,8 @@ func main() {
 
 	router := gin.Default()
 
+	router.LoadHTMLGlob("./templates/*.tmpl.html")
+
 	// Override environment variables
 	if port, exists := os.LookupEnv("PORT"); exists {
 		PORT = port
@@ -110,9 +115,18 @@ func main() {
 	_ = os.MkdirAll(RT_CACHE, os.ModePerm)
 	_ = os.MkdirAll(TMP, os.ModePerm)
 
-	// Redirect index requests to the GitHub project page
 	router.GET("/", func(context *gin.Context) {
-		context.Redirect(http.StatusMovedPermanently, "https://github.com/AdoptOpenJDK/jlink.online")
+		readmeFile, err := ioutil.ReadFile("./README.md")
+		if err != nil {
+			log.Println(err)
+		}
+		// readme := blackfriday.MarkdownCommon([]byte(readmeFile))
+		readme := template.HTML(blackfriday.MarkdownCommon([]byte(readmeFile)))
+
+        context.HTML(http.StatusOK, "index.tmpl.html", gin.H{
+            "markdown": readme,
+        })
+		return
 	})
 
 	// An endpoint for runtime requests

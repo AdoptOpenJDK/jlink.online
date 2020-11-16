@@ -1,0 +1,51 @@
+<head>
+    <link rel="stylesheet" type="text/css" href="https://pagecdn.io/lib/antd/4.5.2/antd.min.css">
+</head>
+
+<header class="header ant-layout-header" style="background: rgb(21, 41, 53); margin-bottom: 3em;">
+    <div class="logo">
+    </div>
+    <ul class="ant-menu ant-menu-dark ant-menu-root ant-menu-horizontal" role="menu" style="line-height: 64px; background: rgb(21, 41, 53);">
+      <li class="ant-menu-submenu ant-menu-submenu-horizontal ant-menu-overflowed-submenu" role="menuitem" style="display: none;">
+        <div class="ant-menu-submenu-title" aria-expanded="false" aria-haspopup="true">
+          <span>···
+          </span>
+          <i class="ant-menu-submenu-arrow">
+          </i>
+        </div>
+      </li>
+      <li class="ant-menu-item" role="menuitem">
+        <a href="https://adoptopenjdk.net/" style="display: flex; width: 20em;">
+          <img src="https://adoptopenjdk.net/dist/assets/adopt_logo_white.svg">
+        </a>
+      </li>
+      <li class="ant-menu-submenu ant-menu-submenu-horizontal ant-menu-overflowed-submenu" role="menuitem" style="display: none;">
+        <div class="ant-menu-submenu-title" aria-expanded="false" aria-haspopup="true">
+          <span>···
+          </span>
+          <i class="ant-menu-submenu-arrow">
+          </i>
+        </div>
+      </li>
+      <li class="ant-menu-item ant-menu-item-selected" role="menuitem">
+        <a href="/">jlink.online
+        </a>
+      </li>
+      <li class="ant-menu-submenu ant-menu-submenu-horizontal ant-menu-overflowed-submenu" role="menuitem" style="visibility: hidden; position: absolute; display: none;">
+        <div class="ant-menu-submenu-title" aria-expanded="false" aria-haspopup="true">
+          <span>···
+          </span>
+          <i class="ant-menu-submenu-arrow">
+          </i>
+        </div>
+      </li>
+    </ul>
+  </header>
+  
+
+
+<body>
+    <div class="container" style="margin-left: auto; margin-right: auto; width: 70%;">
+        {{ .markdown }}
+    </div>
+</body>
