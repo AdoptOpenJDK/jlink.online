@@ -1,6 +1,6 @@
 **jlink.online** is a HTTP microservice that builds optimized/minimized Java runtimes on the fly.
 
-:boom: This project is currently experimental and subject to change at any time. :boom:
+This project is currently experimental and subject to change at any time.
 
 ## Introduction
 This project is a wrapper for Java's `jlink` utility that makes it faster and easier to build custom Java runtimes for an application. Just send it a HTTP request and **jlink.online** fetches the appropriate JDK [from AdoptOpenJDK](https://github.com/AdoptOpenJDK), runs `jlink` to produce a custom runtime image containing your dependencies, then returns that compressed runtime in the response.
