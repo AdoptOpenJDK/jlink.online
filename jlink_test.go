@@ -141,22 +141,22 @@ func TestJlink(t *testing.T) {
 	// Allow the server some time to start
 	time.Sleep(4 * time.Second)
 
-	assertRequestSuccess(t, "http://localhost:8080/x64/linux/11.0.8+10?modules=java.base", "11.0.8+10", "linux")
-	assertRequestSuccess(t, "http://localhost:8080/x64/windows/11.0.8+10?modules=java.base", "11.0.8+10", "windows")
-	assertRequestSuccess(t, "http://localhost:8080/x64/mac/11.0.8+10?modules=java.base", "11.0.8+10", "mac")
-	assertRequestSuccess(t, "http://localhost:8080/ppc64/aix/11.0.8+10?modules=java.base", "11.0.8+10", "aix")
+	assertRequestSuccess(t, "http://localhost:8080/runtime/x64/linux/11.0.8+10?modules=java.base", "11.0.8+10", "linux")
+	assertRequestSuccess(t, "http://localhost:8080/runtime/x64/windows/11.0.8+10?modules=java.base", "11.0.8+10", "windows")
+	assertRequestSuccess(t, "http://localhost:8080/runtime/x64/mac/11.0.8+10?modules=java.base", "11.0.8+10", "mac")
+	assertRequestSuccess(t, "http://localhost:8080/runtime/ppc64/aix/11.0.8+10?modules=java.base", "11.0.8+10", "aix")
 
 	// Invalid architecture
-	assertRequestFailure(t, "http://localhost:8080/a/windows/11.0.8+10", 400)
+	assertRequestFailure(t, "http://localhost:8080/runtime/a/windows/11.0.8+10", 400)
 	// Invalid OS
-	assertRequestFailure(t, "http://localhost:8080/x64/a/11.0.8+10", 400)
+	assertRequestFailure(t, "http://localhost:8080/runtime/x64/a/11.0.8+10", 400)
 	// Invalid version
-	assertRequestFailure(t, "http://localhost:8080/x64/windows/1a3", 400)
+	assertRequestFailure(t, "http://localhost:8080/runtime/x64/windows/1a3", 400)
 	// Nonexistent version
-	assertRequestFailure(t, "http://localhost:8080/x64/windows/99", 400)
+	assertRequestFailure(t, "http://localhost:8080/runtime/x64/windows/99", 400)
 	// Invalid module
-	assertRequestFailure(t, "http://localhost:8080/x64/windows/11.0.8+10?modules=123", 400)
-	assertRequestFailure(t, "http://localhost:8080/x64/windows/11.0.8+10?modules=&", 400)
+	assertRequestFailure(t, "http://localhost:8080/runtime/x64/windows/11.0.8+10?modules=123", 400)
+	assertRequestFailure(t, "http://localhost:8080/runtime/x64/windows/11.0.8+10?modules=&", 400)
 }
 
 func TestVersionRegex(t *testing.T) {
