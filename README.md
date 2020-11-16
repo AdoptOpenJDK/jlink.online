@@ -8,6 +8,8 @@ This project is a wrapper for Java's `jlink` utility that makes it faster and ea
 Using an optimized runtime is a good idea when deploying to a production environment or when bundling a platform-specific runtime to distribute with your application. For many applications, a `jlink`'d runtime will be significantly smaller in size.
 
 ## Usage Examples
+The following examples can be run interactively from [the Swagger documentation](https://jlink.online/swagger-ui).
+
 #### Download a minimized Java 11 runtime for Linux x64 (containing `java.base` only)
 ```
 https://jlink.online/x64/linux/11.0.8+10

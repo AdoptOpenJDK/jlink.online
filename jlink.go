@@ -13,6 +13,8 @@ package main
 
 import (
 	"bytes"
+	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -23,8 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"io/ioutil"
-	"html/template"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mholt/archiver/v3"
@@ -49,6 +49,9 @@ var (
 
 	// The architecture for local runtimes
 	LOCAL_ARCH = "x64"
+
+	// The default path for swagger documentation
+	SWAGGER_PATH = "/app/swagger-ui"
 )
 
 // A client for downloading artifacts and release metadata from api.adoptopenjdk.net
@@ -123,14 +126,17 @@ func main() {
 		// readme := blackfriday.MarkdownCommon([]byte(readmeFile))
 		readme := template.HTML(blackfriday.MarkdownCommon([]byte(readmeFile)))
 
-        context.HTML(http.StatusOK, "index.tmpl.html", gin.H{
-            "markdown": readme,
-        })
+		context.HTML(http.StatusOK, "index.tmpl.html", gin.H{
+			"markdown": readme,
+		})
 		return
 	})
 
+	// Serve API documentation
+	router.Static("/swagger-ui", SWAGGER_PATH)
+
 	// An endpoint for runtime requests
-	router.GET("/:arch/:os/:version", func(context *gin.Context) {
+	router.GET("/runtime/:arch/:os/:version", func(context *gin.Context) {
 
 		var (
 			arch     = context.Param("arch")
@@ -155,7 +161,7 @@ func main() {
 	})
 
 	// An endpoint for runtime requests (JSON)
-	router.POST("/", func(context *gin.Context) {
+	router.POST("/runtime", func(context *gin.Context) {
 		var req runtimeRequest
 
 		err := context.BindJSON(&req)
@@ -172,7 +178,7 @@ func main() {
 	})
 
 	// An endpoint for runtime requests containing a module-info.java file
-	router.POST("/:arch/:os/:version", func(context *gin.Context) {
+	router.POST("/runtime/:arch/:os/:version", func(context *gin.Context) {
 		bytes, err := context.GetRawData()
 		if err != nil {
 			context.JSON(http.StatusBadRequest, gin.H{"success": false, "reason": "The request body must be a valid module-info.java file"})
