@@ -93,7 +93,7 @@ func main() {
 
 	router := gin.Default()
 
-	router.LoadHTMLGlob("./templates/*.tmpl.html")
+	router.LoadHTMLGlob("templates/*.tmpl.html")
 
 	// Override environment variables
 	if port, exists := os.LookupEnv("PORT"); exists {
