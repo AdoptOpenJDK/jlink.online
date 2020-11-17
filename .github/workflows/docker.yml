@@ -23,6 +23,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
         registry: docker.pkg.github.com
-        repository: AdoptOpenJDK/jlink.online/docker
+        repository: adoptopenjdk/jlink.online/docker
         tags: latest
         push: ${{ github.ref == 'refs/heads/' }}
