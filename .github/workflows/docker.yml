@@ -21,7 +21,7 @@ jobs:
       uses: docker/build-push-action@v1
       with:
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ secrets.ACCESS_TOKEN }}
         registry: ghcr.io
         repository: adoptopenjdk/jlink.online/docker
         tags: latest
