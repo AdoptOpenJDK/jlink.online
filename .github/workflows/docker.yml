@@ -25,4 +25,4 @@ jobs:
         registry: docker.pkg.github.com
         repository: adoptopenjdk/jlink.online/docker
         tags: latest
-        push: ${{ github.ref == 'refs/heads/' }}
+        push: ${{ github.ref == 'refs/heads/master' }}
