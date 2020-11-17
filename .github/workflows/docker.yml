@@ -1,0 +1,28 @@
+
+name: Docker
+
+on:
+  pull_request:
+    branches:         
+    - master
+  push:
+    branches:         
+    - master
+
+jobs:
+  build-and-push-jlink:
+    name: jlink.online
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+
+    - name: Push to GitHub Packages
+      uses: docker/build-push-action@v1
+      with:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        registry: docker.pkg.github.com
+        repository: AdoptOpenJDK/jlink.online/docker
+        tags: latest
+        push: ${{ github.ref == 'refs/heads/'
