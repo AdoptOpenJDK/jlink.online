@@ -14,12 +14,12 @@ jobs:
 
     - uses: actions/checkout@v2
 
-    - name: Push to GitHub Packages
+    - name: Push to OpenShift
       uses: docker/build-push-action@v1
       with:
-        username: ${{ github.actor }}
-        password: ${{ secrets.ACCESS_TOKEN }}
-        registry: ghcr.io
-        repository: adoptopenjdk/jlink.online/docker
+        username: ${{ secrets.OPENSHIFT_USERNAME }}
+        password: ${{ secrets.OPENSHIFT_TOKEN }}
+        registry: registry.pro-us-east-1.openshift.com
+        repository: jlink-online-production/jlink-online
         tags: latest
         push: ${{ github.ref == 'refs/heads/master' }}
