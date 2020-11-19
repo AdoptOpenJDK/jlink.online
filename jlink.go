@@ -138,13 +138,15 @@ func main() {
 
 	// An endpoint for health checks
 	router.GET("/status", func(context *gin.Context) {
-		var stat syscall.Statfs_t
-		if syscall.Statfs(RT_CACHE, &stat) != nil {
-			// Don't include the free space
-			context.JSON(http.StatusOK, gin.H{"success": true})
+
+		if LOCAL_PLATFORM != "windows" {
+			var stat syscall.Statfs_t
+			if syscall.Statfs(RT_CACHE, &stat) == nil {
+				context.JSON(http.StatusOK, gin.H{"success": true, "cache_free": stat.Bavail * uint64(stat.Bsize)})
+			}
 		}
 
-		context.JSON(http.StatusOK, gin.H{"success": true, "cache_free": stat.Bavail * uint64(stat.Bsize)})
+		context.JSON(http.StatusOK, gin.H{"success": true})
 	})
 
 	// An endpoint for runtime requests
