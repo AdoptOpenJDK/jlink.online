@@ -132,8 +132,23 @@ func main() {
 		return
 	})
 
-	// Serve API documentation
+	// An endpoint for API documentation
 	router.Static("/swagger-ui", SWAGGER_PATH)
+
+	// An endpoint for health checks
+	router.GET("/status", func(context *gin.Context) {
+
+		if LOCAL_PLATFORM != "windows" {
+			out, err := exec.Command("df", "-B1", "--output=avail", RT_CACHE).Output()
+			if err == nil {
+				free, _ := strconv.Atoi(strings.Fields(string(out))[1])
+				context.JSON(http.StatusOK, gin.H{"success": true, "cache_free": free})
+				return
+			}
+		}
+
+		context.JSON(http.StatusOK, gin.H{"success": true})
+	})
 
 	// An endpoint for runtime requests
 	router.GET("/runtime/:arch/:os/:version", func(context *gin.Context) {

@@ -134,13 +134,14 @@ func assertRequestFailure(t *testing.T, req string, expectedCode int) {
 	assert.Equal(t, expectedCode, res.StatusCode)
 }
 
-func TestJlink(t *testing.T) {
+func TestApi(t *testing.T) {
 	os.Setenv("PORT", "8080")
 	go main()
 
 	// Allow the server some time to start
 	time.Sleep(4 * time.Second)
 
+	// Send valid requests
 	assertRequestSuccess(t, "http://localhost:8080/runtime/x64/linux/11.0.8+10?modules=java.base", "11.0.8+10", "linux")
 	assertRequestSuccess(t, "http://localhost:8080/runtime/x64/windows/11.0.8+10?modules=java.base", "11.0.8+10", "windows")
 	assertRequestSuccess(t, "http://localhost:8080/runtime/x64/mac/11.0.8+10?modules=java.base", "11.0.8+10", "mac")
@@ -157,6 +158,12 @@ func TestJlink(t *testing.T) {
 	// Invalid module
 	assertRequestFailure(t, "http://localhost:8080/runtime/x64/windows/11.0.8+10?modules=123", 400)
 	assertRequestFailure(t, "http://localhost:8080/runtime/x64/windows/11.0.8+10?modules=&", 400)
+
+	// Health check
+	res, err := http.Get("http://localhost:8080/status")
+	assert.NoError(t, err)
+	assert.Equal(t, 200, res.StatusCode)
+	defer res.Body.Close()
 }
 
 func TestVersionRegex(t *testing.T) {
