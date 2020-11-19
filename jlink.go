@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -132,8 +133,19 @@ func main() {
 		return
 	})
 
-	// Serve API documentation
+	// An endpoint for API documentation
 	router.Static("/swagger-ui", SWAGGER_PATH)
+
+	// An endpoint for health checks
+	router.GET("/status", func(context *gin.Context) {
+		var stat syscall.Statfs_t
+		if syscall.Statfs(RT_CACHE, &stat) != nil {
+			// Don't include the free space
+			context.JSON(http.StatusOK, gin.H{"success": true})
+		}
+
+		context.JSON(http.StatusOK, gin.H{"success": true, "cache_free": stat.Bavail * uint64(stat.Bsize)})
+	})
 
 	// An endpoint for runtime requests
 	router.GET("/runtime/:arch/:os/:version", func(context *gin.Context) {

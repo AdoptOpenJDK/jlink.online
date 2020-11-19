@@ -3,7 +3,7 @@
 This project is currently experimental and subject to change at any time.
 
 ## Introduction
-This project is a wrapper for Java's `jlink` utility that makes it faster and easier to build custom Java runtimes for an application. Just send it a HTTP request and **jlink.online** fetches the appropriate JDK [from AdoptOpenJDK](https://github.com/AdoptOpenJDK), runs `jlink` to produce a custom runtime image containing your dependencies, then returns that compressed runtime in the response.
+This project is a wrapper for Java's `jlink` utility that makes it faster and easier to build custom Java runtimes for an application. Just send a HTTP request and **jlink.online** fetches the appropriate JDK [(from AdoptOpenJDK)](https://github.com/AdoptOpenJDK), runs `jlink` to produce a custom runtime image containing your dependencies, then returns that compressed runtime in the response.
 
 Using an optimized runtime is a good idea when deploying to a production environment or when bundling a platform-specific runtime to distribute with your application. For many applications, a `jlink`'d runtime will be significantly smaller in size.
 
@@ -12,12 +12,12 @@ The following examples can be run interactively from [the Swagger documentation]
 
 #### Download a minimized Java 11 runtime for Linux x64 (containing `java.base` only)
 ```
-https://jlink.online/x64/linux/11.0.8+10
+https://jlink.online/runtime/x64/linux/11.0.8+10
 ```
 
 #### Download a minimized Java 11 runtime for Linux x64 (containing `java.desktop` and `jdk.zipfs`)
 ```
-https://jlink.online/x64/linux/11.0.8+10?modules=java.desktop,jdk.zipfs
+https://jlink.online/runtime/x64/linux/11.0.8+10?modules=java.desktop,jdk.zipfs
 ```
 
 #### Download a minimized runtime in a Dockerfile
@@ -29,7 +29,7 @@ FROM alpine:latest
 RUN apk add curl
 
 # Install custom runtime
-RUN curl -G 'https://jlink.online/x64/linux/11.0.8+10' \
+RUN curl -G 'https://jlink.online/runtime/x64/linux/11.0.8+10' \
     -d modules=java.base \
     | tar zxf -
 
@@ -49,7 +49,7 @@ module com.github.example {
 Then to build a custom runtime containing your dependencies, you can send a POST request containing your `module-info.java`:
 ```sh
 curl --data-binary @com.github.example/src/main/java/module-info.java \
-  'https://jlink.online/x64/linux/11.0.8+10?artifacts=org.slf4j:slf4j-api:2.0.0-alpha1' \
+  'https://jlink.online/runtime/x64/linux/11.0.8+10?artifacts=org.slf4j:slf4j-api:2.0.0-alpha1' \
   --output app_runtime.tar.gz
 ```
 
