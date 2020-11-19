@@ -24,7 +24,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -140,9 +139,11 @@ func main() {
 	router.GET("/status", func(context *gin.Context) {
 
 		if LOCAL_PLATFORM != "windows" {
-			var stat syscall.Statfs_t
-			if syscall.Statfs(RT_CACHE, &stat) == nil {
-				context.JSON(http.StatusOK, gin.H{"success": true, "cache_free": stat.Bavail * uint64(stat.Bsize)})
+			out, err := exec.Command("df", "-B1", "--output=avail", RT_CACHE).Output()
+			if err == nil {
+				free, _ := strconv.Atoi(strings.Fields(string(out))[1])
+				context.JSON(http.StatusOK, gin.H{"success": true, "cache_free": free})
+				return
 			}
 		}
 
