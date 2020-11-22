@@ -436,8 +436,10 @@ func jlink(jdk, mavenCentral, runtime, endian, version, platform, filename strin
 	archive, dir := newTemporaryFile(filename)
 	defer os.RemoveAll(dir)
 
-	// TODO: archiver can't handle symlinks in this directory
-	_ = os.RemoveAll(filepath.FromSlash(output + "/legal"))
+	// Archiver can't handle the symlinks in /legal on windows
+	if LOCAL_PLATFORM == "windows" {
+		_ = os.RemoveAll(filepath.FromSlash(output + "/legal"))
+	}
 
 	if err := archiver.Archive([]string{output}, archive); err != nil {
 		return nil, err
