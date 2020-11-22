@@ -13,7 +13,6 @@ RUN go build -o main .
 
 ENV GIN_MODE=release
 ENV MAVEN_CENTRAL=false
-ENV RT_CACHE=/app/runtimes
 
 EXPOSE 8080
 
