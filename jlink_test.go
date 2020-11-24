@@ -58,6 +58,11 @@ func assertRuntimeContents(t *testing.T, output, version, platform string) {
 		_, err := os.Stat(filepath.FromSlash(output + "/jdk-" + version + "/bin/java"))
 		assert.NoError(t, err)
 	}
+
+	if determineLocalPlatform() != "windows" {
+		_, err := os.Stat(filepath.FromSlash(output + "/jdk-" + version + "/legal"))
+		assert.NoError(t, err)
+	}
 }
 
 // Ensure no files are present from the wrong platform
