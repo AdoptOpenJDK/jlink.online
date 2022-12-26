@@ -1,6 +1,6 @@
 module github.com/adoptopenjdk/jlink.online
 
-go 1.14
+go 1.19
 
 require (
 	github.com/gin-gonic/gin v1.8.2
