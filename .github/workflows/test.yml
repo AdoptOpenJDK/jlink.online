@@ -16,17 +16,17 @@ jobs:
     steps:
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
       with:
         go-version: 1.19.4
 
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - name: Test
       run: |
         go test -coverprofile coverage.txt -covermode atomic
 
-    - uses: codecov/codecov-action@v3
+    - uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4.0.1
       with:
         files: ./coverage.txt
         fail_ci_if_error: true
