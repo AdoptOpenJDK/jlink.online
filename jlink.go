@@ -123,8 +123,7 @@ func main() {
 		if err != nil {
 			log.Println(err)
 		}
-		// readme := blackfriday.MarkdownCommon([]byte(readmeFile))
-		readme := template.HTML(blackfriday.MarkdownCommon([]byte(readmeFile)))
+		readme := template.HTML(blackfriday.Run(readmeFile))
 
 		context.HTML(http.StatusOK, "index.tmpl.html", gin.H{
 			"markdown": readme,
